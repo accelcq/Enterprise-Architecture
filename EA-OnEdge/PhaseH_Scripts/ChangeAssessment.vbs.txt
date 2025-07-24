@@ -1,0 +1,138 @@
+Option Explicit
+
+!INC Local Scripts.EAConstants-VBScript
+
+' ----- Recursive function to find a package by name -----
+Function findPackageByName(parentPackage, targetName)
+    Dim i, pkg, found
+    Set findPackageByName = Nothing
+    For i = 0 To parentPackage.Packages.Count - 1
+        Set pkg = parentPackage.Packages.GetAt(i)
+        If pkg.Name = targetName Then
+            Set findPackageByName = pkg
+            Exit Function
+        End If
+        Set found = findPackageByName(pkg, targetName)
+        If Not found Is Nothing Then
+            Set findPackageByName = found
+            Exit Function
+        End If
+    Next
+End Function
+
+' ----- Main script -----
+Sub CreatePhaseHChangeAssessmentDiagram()
+
+    Repository.EnsureOutputVisible "Script"
+    Session.Output "VBScript CREATE PHASE H CHANGE ASSESSMENT DIAGRAM"
+    Session.Output "==============================================="
+
+    Dim i, tempModel
+
+    ' Find root model "Model"
+    Dim rootModel As EA.Package
+    Set rootModel = Nothing
+    For i = 0 To Repository.Models.Count - 1
+        Set tempModel = Repository.Models.GetAt(i)
+        If tempModel.Name = "Model" Then
+            Set rootModel = tempModel
+            Exit For
+        End If
+    Next
+    If rootModel Is Nothing Then
+        Session.Output "Error: Root model 'Model' not found.": Exit Sub
+    End If
+
+    ' Find "Architecture Development Method"
+    Dim admPackage As EA.Package
+    Set admPackage = findPackageByName(rootModel, "Architecture Development Method")
+    If admPackage Is Nothing Then
+        Session.Output "Error: Architecture Development Method package not found.": Exit Sub
+    End If
+
+    ' Find or create Phase H package
+    Dim phaseHPackage As EA.Package
+    Set phaseHPackage = findPackageByName(admPackage, "Phase H")
+    If phaseHPackage Is Nothing Then
+        Set phaseHPackage = admPackage.Packages.AddNew("Phase H", "Package")
+        phaseHPackage.Update
+    End If
+
+    ' Check/Create Change Assessment Diagram
+    Dim assessDiagram As EA.Diagram
+    Set assessDiagram = Nothing
+    For i = 0 To phaseHPackage.Diagrams.Count - 1
+        Dim diag As EA.Diagram
+        Set diag = phaseHPackage.Diagrams.GetAt(i)
+        If diag.Name = "Change Assessment Diagram" Then
+            Set assessDiagram = diag
+            Exit For
+        End If
+    Next
+    If assessDiagram Is Nothing Then
+        Set assessDiagram = phaseHPackage.Diagrams.AddNew("Change Assessment Diagram", "Activity")
+        assessDiagram.Notes = "Phase H: Architecture change submission, review, approval, implementation & reporting process."
+        assessDiagram.Update
+    End If
+
+    ' Define elements for major process steps and roles
+    Dim elements(5), stereotypes(5), types(5), colors(5), sizes(5), notes(5), objs(5)
+    elements(0) = "Submit Change Request": stereotypes(0) = "Process": types(0) = "Activity": colors(0) = RGB(112,173,71): sizes(0) = "l=100;r=300;t=100;b=50": notes(0) = "Formal documented request. See Sec 5.1 [1]."
+    elements(1) = "Preliminary Assessment (Project Team)": stereotypes(1) = "Process": types(1) = "Activity": colors(1) = RGB(255,192,0): sizes(1) = "l=350;r=550;t=100;b=50": notes(1) = "Feasibility and initial impact, Section 5.2."
+    elements(2) = "Detailed Review (ARB)": stereotypes(2) = "Review": types(2) = "Activity": colors(2) = RGB(91,155,213): sizes(2) = "l=600;r=800;t=100;b=50": notes(2) = "Compliance, risk, alignment, Sec 5.3."
+    elements(3) = "Approval Process": stereotypes(3) = "Decision": types(3) = "Activity": colors(3) = RGB(237,125,49): sizes(3) = "l=350;r=550;t=220;b=170": notes(3) = "ARB/IGB approve, escalate, or reject (Sec 5.4)."
+    elements(4) = "Implementation & Monitoring": stereotypes(4) = "Realization": types(4) = "Activity": colors(4) = RGB(68,114,196): sizes(4) = "l=600;r=800;t=220;b=170": notes(4) = "Change implemented, monitored for conformance (Sec 5.5)."
+    elements(5) = "Documentation & Reporting": stereotypes(5) = "Process": types(5) = "Activity": colors(5) = RGB(112,173,71): sizes(5) = "l=100;r=300;t=220;b=170": notes(5) = "Report and record all changes and lessons (Sec 5.6)."
+
+    For i = 0 To 5
+        Dim elem As EA.Element
+        Set elem = phaseHPackage.Elements.AddNew(elements(i), types(i))
+        elem.Stereotype = stereotypes(i)
+        elem.Notes = notes(i)
+        elem.Update
+        Set objs(i) = elem
+    Next
+
+    Dim diagObjects As EA.Collection
+    Set diagObjects = assessDiagram.DiagramObjects
+    For i = 0 To 5
+        Dim diagObj As EA.DiagramObject
+        Set diagObj = diagObjects.AddNew(sizes(i) & ";", "")
+        diagObj.ElementID = objs(i).ElementID
+        diagObj.BackgroundColor = colors(i)
+        diagObj.Update
+    Next
+
+    ' Connect steps in sequence and by escalation/feedback paths
+    Dim connectors As EA.Collection
+    Set connectors = phaseHPackage.Connectors
+    Dim conn As EA.Connector
+
+    Set conn = connectors.AddNew("", "ControlFlow")
+    conn.SupplierID = objs(0).ElementID: conn.ClientID = objs(1).ElementID: conn.Name = "Next": conn.Update
+
+    Set conn = connectors.AddNew("", "ControlFlow")
+    conn.SupplierID = objs(1).ElementID: conn.ClientID = objs(2).ElementID: conn.Name = "Next": conn.Update
+
+    Set conn = connectors.AddNew("", "ControlFlow")
+    conn.SupplierID = objs(2).ElementID: conn.ClientID = objs(3).ElementID: conn.Name = "Decision": conn.Update
+
+    Set conn = connectors.AddNew("", "ControlFlow")
+    conn.SupplierID = objs(3).ElementID: conn.ClientID = objs(4).ElementID: conn.Name = "Approved": conn.Update
+
+    Set conn = connectors.AddNew("", "ControlFlow")
+    conn.SupplierID = objs(3).ElementID: conn.ClientID = objs(5).ElementID: conn.Name = "Report": conn.Update
+
+    Set conn = connectors.AddNew("", "ControlFlow")
+    conn.SupplierID = objs(4).ElementID: conn.ClientID = objs(5).ElementID: conn.Name = "Monitor": conn.Update
+
+    Repository.RefreshModelView phaseHPackage.PackageID
+    assessDiagram.Update
+    Repository.ReloadDiagram assessDiagram.DiagramID
+
+    Session.Output "Change Assessment Diagram created successfully under MODEL > Architecture Development Method > Phase H"
+    Session.Output "Done!"
+
+End Sub
+
+CreatePhaseHChangeAssessmentDiagram

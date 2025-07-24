@@ -1,0 +1,120 @@
+Option Explicit
+
+!INC Local Scripts.EAConstants-VBScript
+
+' ----- Recursive function to find a package by name -----
+Function findPackageByName(parentPackage, targetName)
+    Dim i, pkg, found
+    Set findPackageByName = Nothing
+    For i = 0 To parentPackage.Packages.Count - 1
+        Set pkg = parentPackage.Packages.GetAt(i)
+        If pkg.Name = targetName Then
+            Set findPackageByName = pkg
+            Exit Function
+        End If
+        Set found = findPackageByName(pkg, targetName)
+        If Not found Is Nothing Then
+            Set findPackageByName = found
+            Exit Function
+        End If
+    Next
+End Function
+
+Sub CreatePhaseHValueRealizationDiagram()
+
+    Repository.EnsureOutputVisible "Script"
+    Session.Output "VBScript CREATE PHASE H VALUE REALIZATION DIAGRAM"
+    Session.Output "==============================================="
+
+    Dim i, tempModel
+
+    ' Find root model "Model"
+    Dim rootModel As EA.Package
+    Set rootModel = Nothing
+    For i = 0 To Repository.Models.Count - 1
+        Set tempModel = Repository.Models.GetAt(i)
+        If tempModel.Name = "Model" Then
+            Set rootModel = tempModel
+            Exit For
+        End If
+    Next
+    If rootModel Is Nothing Then
+        Session.Output "Error: Root model 'Model' not found.": Exit Sub
+    End If
+
+    ' Find "Architecture Development Method"
+    Dim admPackage As EA.Package
+    Set admPackage = findPackageByName(rootModel, "Architecture Development Method")
+    If admPackage Is Nothing Then
+        Session.Output "Error: Architecture Development Method package not found.": Exit Sub
+    End If
+
+    ' Find or create Phase H package
+    Dim phaseHPackage As EA.Package
+    Set phaseHPackage = findPackageByName(admPackage, "Phase H")
+    If phaseHPackage Is Nothing Then
+        Set phaseHPackage = admPackage.Packages.AddNew("Phase H", "Package")
+        phaseHPackage.Update
+    End If
+
+    ' Check/Create diagram
+    Dim valDiagram As EA.Diagram
+    Set valDiagram = Nothing
+    For i = 0 To phaseHPackage.Diagrams.Count - 1
+        Dim diag As EA.Diagram
+        Set diag = phaseHPackage.Diagrams.GetAt(i)
+        If diag.Name = "Value Realization Diagram" Then
+            Set valDiagram = diag
+            Exit For
+        End If
+    Next
+    If valDiagram Is Nothing Then
+        Set valDiagram = phaseHPackage.Diagrams.AddNew("Value Realization Diagram", "Object")
+        valDiagram.Notes = "Phase H: Continuous value delivery, performance monitoring, and improvement cycle."
+        valDiagram.Update
+    End If
+
+    ' Value/KPI monitoring elements
+    Dim elements(3), stereotypes(3), types(3), colors(3), sizes(3), notes(3), objs(3)
+    elements(0) = "Business Value Realized": stereotypes(0) = "KPI": types(0) = "Class": colors(0) = RGB(112,173,71): sizes(0) = "l=120;r=320;t=120;b=70": notes(0) = "Track quantifiable business benefits post-change."
+    elements(1) = "Performance Monitoring": stereotypes(1) = "Process": types(1) = "Object": colors(1) = RGB(255,192,0): sizes(1) = "l=380;r=580;t=120;b=70": notes(1) = "Monitor, collect, and review architecture KPIs."
+    elements(2) = "Continuous Improvement": stereotypes(2) = "Process": types(2) = "Object": colors(2) = RGB(68,114,196): sizes(2) = "l=250;r=430;t=250;b=200": notes(2) = "Refine architecture, update processes as needed."
+
+    For i = 0 To 2
+        Dim elem As EA.Element
+        Set elem = phaseHPackage.Elements.AddNew(elements(i), types(i))
+        elem.Stereotype = stereotypes(i)
+        elem.Notes = notes(i)
+        elem.Update
+        Set objs(i) = elem
+    Next
+
+    Dim diagObjects As EA.Collection
+    Set diagObjects = valDiagram.DiagramObjects
+    For i = 0 To 2
+        Dim diagObj As EA.DiagramObject
+        Set diagObj = diagObjects.AddNew(sizes(i) & ";", "")
+        diagObj.ElementID = objs(i).ElementID
+        diagObj.BackgroundColor = colors(i)
+        diagObj.Update
+    Next
+
+    ' Connect as a cycle
+    Dim connectors As EA.Collection
+    Set connectors = phaseHPackage.Connectors
+    Dim conn As EA.Connector
+
+    Set conn = connectors.AddNew("", "ControlFlow"): conn.SupplierID = objs(0).ElementID: conn.ClientID = objs(1).ElementID: conn.Name = "Review KPIs": conn.Update
+    Set conn = connectors.AddNew("", "ControlFlow"): conn.SupplierID = objs(1).ElementID: conn.ClientID = objs(2).ElementID: conn.Name = "Recommend Action": conn.Update
+    Set conn = connectors.AddNew("", "ControlFlow"): conn.SupplierID = objs(2).ElementID: conn.ClientID = objs(0).ElementID: conn.Name = "Value Improved": conn.Update
+
+    Repository.RefreshModelView phaseHPackage.PackageID
+    valDiagram.Update
+    Repository.ReloadDiagram valDiagram.DiagramID
+
+    Session.Output "Value Realization Diagram created successfully under MODEL > Architecture Development Method > Phase H"
+    Session.Output "Done!"
+
+End Sub
+
+CreatePhaseHValueRealizationDiagram

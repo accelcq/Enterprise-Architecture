@@ -1,0 +1,200 @@
+Option Explicit
+
+!INC Local Scripts.EAConstants-VBScript
+
+' Recursive helper to find a package by name (case-insensitive)
+Function findPackageByName(parentPackage, targetName)
+    Dim i, pkg, found
+    Set findPackageByName = Nothing
+    For i = 0 To parentPackage.Packages.Count - 1
+        Set pkg = parentPackage.Packages.GetAt(i)
+        If pkg.Name = targetName Then
+            Set findPackageByName = pkg
+            Exit Function
+        End If
+        Set found = findPackageByName(pkg, targetName)
+        If Not found Is Nothing Then
+            Set findPackageByName = found
+            Exit Function
+        End If
+    Next
+End Function
+
+Sub CreatePhaseDTechnologyArchitectureDiagram()
+
+    Repository.EnsureOutputVisible "Script"
+    Session.Output "VBScript CREATE PHASE D TECHNOLOGY ARCHITECTURE DIAGRAM"
+    Session.Output "==============================================="
+
+    Dim i, tempModel
+
+    ' 1. Find root model "Model"
+    Dim rootModel As EA.Package
+    Set rootModel = Nothing
+    For i = 0 To Repository.Models.Count - 1
+        Set tempModel = Repository.Models.GetAt(i)
+        If tempModel.Name = "Model" Then
+            Set rootModel = tempModel
+            Exit For
+        End If
+    Next
+    If rootModel Is Nothing Then
+        Session.Output "Error: Root model 'Model' not found."
+        Exit Sub
+    End If
+    Session.Output "Root model found: " & rootModel.Name
+
+    ' 2. Find "Architecture Development Method"
+    Dim admPackage As EA.Package
+    Set admPackage = findPackageByName(rootModel, "Architecture Development Method")
+    If admPackage Is Nothing Then
+        Session.Output "Error: Architecture Development Method package not found."
+        Exit Sub
+    End If
+    Session.Output "Found package: " & admPackage.Name
+
+    ' 3. Find or create Phase D package
+    Dim phaseDPackage As EA.Package
+    Set phaseDPackage = findPackageByName(admPackage, "Phase D")
+    If phaseDPackage Is Nothing Then
+        Set phaseDPackage = admPackage.Packages.AddNew("Phase D", "Package")
+        phaseDPackage.Update
+        Session.Output "Created package: Phase D"
+    End If
+    Session.Output "Using package: " & phaseDPackage.Name
+
+    ' 4. Check/Create Technology Architecture Diagram
+    Dim techDiagram As EA.Diagram
+    Set techDiagram = Nothing
+    For i = 0 To phaseDPackage.Diagrams.Count - 1
+        Dim diag As EA.Diagram
+        Set diag = phaseDPackage.Diagrams.GetAt(i)
+        If diag.Name = "Technology Architecture Diagram" Then
+            Set techDiagram = diag
+            Exit For
+        End If
+    Next
+    If techDiagram Is Nothing Then
+        Set techDiagram = phaseDPackage.Diagrams.AddNew("Technology Architecture Diagram", "Component")
+        techDiagram.Notes = "TOGAF Phase D: ASDF AI Technology Architecture—platforms, infra, integration, and core risks with mitigations."
+        techDiagram.Update
+        Session.Output "Created diagram: Technology Architecture Diagram"
+    Else
+        Session.Output "Diagram already exists: Technology Architecture Diagram"
+    End If
+
+    ' 5. Define core tech services from the attached doc
+    Dim elements(8), stereotypes(8), elementTypes(8), elementObjects(8), elementColors(8), elementSizes(8), notes(8)
+    Dim elementCount
+    elementCount = 0
+
+    ' --- Service Layer ---
+    elements(0) = "AI Compute Runtime" : stereotypes(0) = "Service" : elementTypes(0) = "Component"
+    elementColors(0) = RGB(112,173,71): elementSizes(0) = "l=100;r=300;t=80;b=30"
+    notes(0) = "Optimized containers for distributed AI inference & training."
+    elementCount = elementCount + 1
+
+    elements(1) = "Data Synchronization Service" : stereotypes(1) = "Service" : elementTypes(1) = "Component"
+    elementColors(1) = RGB(112,173,71): elementSizes(1) = "l=330;r=530;t=80;b=30"
+    notes(1) = "Delta-based, satellite-linked node synchronization."
+    elementCount = elementCount + 1
+
+    elements(2) = "Enterprise Integration Layer" : stereotypes(2) = "Interface" : elementTypes(2) = "Component"
+    elementColors(2) = RGB(91,155,213): elementSizes(2) = "l=560;r=760;t=80;b=30"
+    notes(2) = "APIs, SDKs, connectors for enterprise integration."
+    elementCount = elementCount + 1
+
+    elements(3) = "Authentication & Identity" : stereotypes(3) = "Service" : elementTypes(3) = "Component"
+    elementColors(3) = RGB(237,125,49): elementSizes(3) = "l=190;r=390;t=170;b=120"
+    notes(3) = "Decentralized ID with OAuth2, DID support."
+    elementCount = elementCount + 1
+
+    elements(4) = "Robotic Micro Data Center (Node)" : stereotypes(4) = "Node" : elementTypes(4) = "Node"
+    elementColors(4) = RGB(255,192,0): elementSizes(4) = "l=100;r=300;t=240;b=190"
+    notes(4) = "Autonomous, resilient, and sustainable physical site."
+    elementCount = elementCount + 1
+
+    elements(5) = "Satellite Network" : stereotypes(5) = "Device" : elementTypes(5) = "Device"
+    elementColors(5) = RGB(68,114,196): elementSizes(5) = "l=330;r=530;t=240;b=190"
+    notes(5) = "Multi-vendor, global, redundant coverage."
+    elementCount = elementCount + 1
+
+    ' --- Risk and Mitigation Elements ---
+    elements(6) = "Risk: Satellite outage" : stereotypes(6) = "Risk" : elementTypes(6) = "Issue"
+    elementColors(6) = RGB(255,0,0): elementSizes(6) = "l=560;r=760;t=240;b=190"
+    notes(6) = "Loss of connectivity due to single-vendor, space/weather events."
+    elementCount = elementCount + 1
+
+    elements(7) = "Mitigation: Multi-vendor Redundancy" : stereotypes(7) = "Mitigation" : elementTypes(7) = "Requirement"
+    elementColors(7) = RGB(112,173,71): elementSizes(7) = "l=560;r=760;t=320;b=270"
+    notes(7) = "Dual satellite providers (Starlink + OneWeb)."
+    elementCount = elementCount + 1
+
+    ' --- Add more tech or risk/mitigation elements as needed from your doc ---
+
+    ' 6. Create elements in the package
+    For i = 0 To elementCount - 1
+        Dim elem As EA.Element
+        Set elem = phaseDPackage.Elements.AddNew(elements(i), elementTypes(i))
+        elem.Stereotype = stereotypes(i)
+        elem.Notes = notes(i)
+        elem.Update
+        Set elementObjects(i) = elem
+        Session.Output "Created element: " & elements(i)
+    Next
+
+    ' 7. Add elements to diagram with position and colors
+    Dim diagObjects As EA.Collection
+    Set diagObjects = techDiagram.DiagramObjects
+    For i = 0 To elementCount - 1
+        Dim diagObj As EA.DiagramObject
+        Set diagObj = diagObjects.AddNew(elementSizes(i) & ";", "")
+        diagObj.ElementID = elementObjects(i).ElementID
+        diagObj.BackgroundColor = elementColors(i)
+        diagObj.Update
+    Next
+
+    ' 8. Create associations (tech stack + risk mitigations)
+    Dim connectors As EA.Collection
+    Set connectors = phaseDPackage.Connectors
+    Dim conn As EA.Connector
+
+    ' Basic service hierarchy
+    Set conn = connectors.AddNew("", "Dependency")
+    conn.SupplierID = elementObjects(0).ElementID: conn.ClientID = elementObjects(1).ElementID
+    conn.Name = "Syncs with": conn.Update
+
+    Set conn = connectors.AddNew("", "Dependency")
+    conn.SupplierID = elementObjects(1).ElementID: conn.ClientID = elementObjects(2).ElementID
+    conn.Name = "Integrates with": conn.Update
+
+    Set conn = connectors.AddNew("", "Association")
+    conn.SupplierID = elementObjects(0).ElementID: conn.ClientID = elementObjects(3).ElementID
+    conn.Name = "Secured by": conn.Update
+
+    Set conn = connectors.AddNew("", "Realization")
+    conn.SupplierID = elementObjects(4).ElementID: conn.ClientID = elementObjects(0).ElementID
+    conn.Name = "Hosts": conn.Update
+
+    Set conn = connectors.AddNew("", "Association")
+    conn.SupplierID = elementObjects(5).ElementID: conn.ClientID = elementObjects(1).ElementID
+    conn.Name = "Channel for": conn.Update
+
+    ' Risk mitigations
+    Set conn = connectors.AddNew("", "Mitigates")
+    conn.SupplierID = elementObjects(7).ElementID: conn.ClientID = elementObjects(6).ElementID
+    conn.Name = "Mitigates": conn.Update
+
+    ' Add more connectors for other technical or risk relationships if needed
+
+    ' 9. Final diagram refresh
+    Repository.RefreshModelView phaseDPackage.PackageID
+    techDiagram.Update
+    Repository.ReloadDiagram techDiagram.DiagramID
+
+    Session.Output "Technology Architecture Diagram created successfully under MODEL > Architecture Development Method > Phase D"
+    Session.Output "Done!"
+
+End Sub
+
+CreatePhaseDTechnologyArchitectureDiagram

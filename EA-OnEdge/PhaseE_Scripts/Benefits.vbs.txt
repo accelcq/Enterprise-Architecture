@@ -1,0 +1,190 @@
+Option Explicit
+
+!INC Local Scripts.EAConstants-VBScript
+
+Sub CreatePhaseEBenefitsDiagram()
+
+    Repository.EnsureOutputVisible "Script"
+    Session.Output "VBScript CREATE PHASE E BENEFITS DIAGRAM"
+    Session.Output "========================================"
+
+    Dim i, tempModel
+
+    ' Find root model "Model"
+    Dim rootModel As EA.Package
+    Set rootModel = Nothing
+    For i = 0 To Repository.Models.Count - 1
+        Set tempModel = Repository.Models.GetAt(i)
+        If tempModel.Name = "Model" Then
+            Set rootModel = tempModel
+            Exit For
+        End If
+    Next
+    If rootModel Is Nothing Then
+        Session.Output "Error: Root model 'Model' not found."
+        Exit Sub
+    End If
+    Session.Output "Root model found: " & rootModel.Name
+
+    ' Find "Architecture Development Method"
+    Dim admPackage As EA.Package
+    Set admPackage = findPackageByName(rootModel, "Architecture Development Method")
+    If admPackage Is Nothing Then
+        Session.Output "Error: Architecture Development Method package not found."
+        Exit Sub
+    End If
+    Session.Output "Found package: " & admPackage.Name
+
+    ' Find or create Phase E package
+    Dim phaseEPackage As EA.Package
+    Set phaseEPackage = findPackageByName(admPackage, "Phase E")
+    If phaseEPackage Is Nothing Then
+        Set phaseEPackage = admPackage.Packages.AddNew("Phase E", "Package")
+        phaseEPackage.Update
+        Session.Output "Created package: Phase E"
+    End If
+    Session.Output "Using package: " & phaseEPackage.Name
+
+    ' Check/Create Benefits Diagram
+    Dim benDiagram As EA.Diagram
+    Set benDiagram = Nothing
+    For i = 0 To phaseEPackage.Diagrams.Count - 1
+        Dim diag As EA.Diagram
+        Set diag = phaseEPackage.Diagrams.GetAt(i)
+        If diag.Name = "Benefits Diagram" Then
+            Set benDiagram = diag
+            Exit For
+        End If
+    Next
+    If benDiagram Is Nothing Then
+        Set benDiagram = phaseEPackage.Diagrams.AddNew("Benefits Diagram", "Component")
+        If Not benDiagram Is Nothing Then
+            benDiagram.Notes = "Benefits realization for Opportunities & Solutions: maps key outcomes, compliance, operational savings, resilience."
+            benDiagram.Update
+            Session.Output "Created diagram: Benefits Diagram"
+        Else
+            Session.Output "Error: Failed to create Benefits Diagram."
+            Exit Sub
+        End If
+    Else
+        Session.Output "Diagram already exists: Benefits Diagram"
+    End If
+
+    ' Define elements: Benefits, Requirements, Projects, Solution components
+    Dim elements(7), stereotypes(7), elementTypes(7), elementObjects(7), elementColors(7), elementSizes(7), notes(7)
+    Dim elementCount
+    elementCount = 0
+
+    ' Benefits (Gold)
+    elements(0) = "Improved Resilience": stereotypes(0) = "Benefit": elementTypes(0) = "Issue": elementColors(0) = RGB(255, 192, 0): elementSizes(0) = "l=80;r=300;t=60;b=10": notes(0) = "System can withstand failure and disruption gracefully with autonomous, distributed design."
+    elementCount = elementCount + 1
+    elements(1) = "Operational Savings": stereotypes(1) = "Benefit": elementTypes(1) = "Issue": elementColors(1) = RGB(255, 192, 0): elementSizes(1) = "l=80;r=300;t=130;b=80": notes(1) = "Lower operating costs through automation, robotics, and decentralized infrastructure."
+    elementCount = elementCount + 1
+    elements(2) = "Regulation Compliance": stereotypes(2) = "Requirement": elementTypes(2) = "Requirement": elementColors(2) = RGB(91, 155, 213): elementSizes(2) = "l=370;r=590;t=60;b=10": notes(2) = "Meets all security, energy, and data sovereignty laws in all jurisdictions."
+    elementCount = elementCount + 1
+    elements(3) = "Reduced Downtime": stereotypes(3) = "Benefit": elementTypes(3) = "Issue": elementColors(3) = RGB(255, 192, 0): elementSizes(3) = "l=370;r=590;t=130;b=80": notes(3) = "Service availability is maximized, with automated monitoring and response."
+    elementCount = elementCount + 1
+
+    ' Solution/Project Elements (Green/Orange)
+    elements(4) = "Micro Data Center Rollout": stereotypes(4) = "Project": elementTypes(4) = "Component": elementColors(4) = RGB(112, 173, 71): elementSizes(4) = "l=650;r=950;t=100;b=50": notes(4) = "Deploy new containerized micro data centers with automated operations."
+    elementCount = elementCount + 1
+    elements(5) = "Autonomous Operations": stereotypes(5) = "Solution": elementTypes(5) = "Component": elementColors(5) = RGB(237, 125, 49): elementSizes(5) = "l=650;r=950;t=180;b=130": notes(5) = "Full-stack automation: robotics, adaptive analytics, and predictive maintenance."
+    elementCount = elementCount + 1
+    elements(6) = "Satellite Connectivity": stereotypes(6) = "Solution": elementTypes(6) = "Component": elementColors(6) = RGB(237, 125, 49): elementSizes(6) = "l=650;r=950;t=260;b=210": notes(6) = "Continuous global broadband backhaul for remote and edge locations."
+    elementCount = elementCount + 1
+
+    ' Create elements in the package
+    For i = 0 To elementCount - 1
+        Dim elem As EA.Element
+        Set elem = phaseEPackage.Elements.AddNew(elements(i), elementTypes(i))
+        elem.Stereotype = stereotypes(i)
+        elem.Notes = notes(i)
+        elem.Update
+        Set elementObjects(i) = elem
+        Session.Output "Created element: " & elements(i)
+    Next
+
+    ' Add elements to diagram with position and colors
+    Dim diagObjects As EA.Collection
+    Set diagObjects = benDiagram.DiagramObjects
+    For i = 0 To elementCount - 1
+        Dim diagObj As EA.DiagramObject
+        Set diagObj = diagObjects.AddNew(elementSizes(i) & ";", "")
+        diagObj.ElementID = elementObjects(i).ElementID
+        diagObj.BackgroundColor = elementColors(i)
+        diagObj.Update
+    Next
+
+    ' Create associations (connectors) *do not use DiagramLinks.AddNew*
+    Dim connectors As EA.Collection
+    Set connectors = phaseEPackage.Connectors
+    Dim conn As EA.Connector
+
+    ' Project delivers benefits
+    Set conn = connectors.AddNew("", "Association")
+    conn.SupplierID = elementObjects(4).ElementID ' Micro Data Center Rollout
+    conn.ClientID = elementObjects(0).ElementID ' Improved Resilience
+    conn.Name = "Delivers"
+    conn.Update
+
+    Set conn = connectors.AddNew("", "Association")
+    conn.SupplierID = elementObjects(4).ElementID
+    conn.ClientID = elementObjects(1).ElementID ' Operational Savings
+    conn.Name = "Enables"
+    conn.Update
+
+    Set conn = connectors.AddNew("", "Association")
+    conn.SupplierID = elementObjects(4).ElementID
+    conn.ClientID = elementObjects(3).ElementID ' Reduced Downtime
+    conn.Name = "Enables"
+    conn.Update
+
+    ' Solution elements enable compliance and further benefits
+    Set conn = connectors.AddNew("", "Association")
+    conn.SupplierID = elementObjects(2).ElementID ' Regulation Compliance
+    conn.ClientID = elementObjects(4).ElementID ' Micro Data Center Rollout
+    conn.Name = "Requirement Of"
+    conn.Update
+
+    Set conn = connectors.AddNew("", "Association")
+    conn.SupplierID = elementObjects(5).ElementID ' Autonomous Operations
+    conn.ClientID = elementObjects(3).ElementID ' Reduced Downtime
+    conn.Name = "Enables"
+    conn.Update
+
+    Set conn = connectors.AddNew("", "Association")
+    conn.SupplierID = elementObjects(6).ElementID ' Satellite Connectivity
+    conn.ClientID = elementObjects(4).ElementID ' Micro Data Center Rollout
+    conn.Name = "Supports"
+    conn.Update
+
+    ' Final model/drawing refresh
+    Repository.RefreshModelView phaseEPackage.PackageID
+    benDiagram.Update
+    Repository.ReloadDiagram benDiagram.DiagramID
+
+    Session.Output "Benefits Diagram created successfully under MODEL > Architecture Development Method > Phase E"
+    Session.Output "Done!"
+
+End Sub
+
+' Recursive function to find a package by name
+Function findPackageByName(parentPackage, targetName)
+    Dim i, pkg, found
+    Set findPackageByName = Nothing
+    For i = 0 To parentPackage.Packages.Count - 1
+        Set pkg = parentPackage.Packages.GetAt(i)
+        If pkg.Name = targetName Then
+            Set findPackageByName = pkg
+            Exit Function
+        End If
+        Set found = findPackageByName(pkg, targetName)
+        If Not found Is Nothing Then
+            Set findPackageByName = found
+            Exit Function
+        End If
+    Next
+End Function
+
+' Run the script
+CreatePhaseEBenefitsDiagram

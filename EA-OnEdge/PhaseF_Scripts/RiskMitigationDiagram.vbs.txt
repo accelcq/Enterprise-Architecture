@@ -1,0 +1,141 @@
+Option Explicit
+
+!INC Local Scripts.EAConstants-VBScript
+
+Sub CreatePhaseFRiskMitigationDiagram()
+
+    Repository.EnsureOutputVisible "Script"
+    Session.Output "VBScript CREATE PHASE F RISK MITIGATION DIAGRAM"
+    Session.Output "==============================================="
+
+    Dim i, tempModel
+
+    ' Find root model "Model"
+    Dim rootModel As EA.Package
+    Set rootModel = Nothing
+    For i = 0 To Repository.Models.Count - 1
+        Set tempModel = Repository.Models.GetAt(i)
+        If tempModel.Name = "Model" Then
+            Set rootModel = tempModel
+            Exit For
+        End If
+    Next
+    If rootModel Is Nothing Then
+        Session.Output "Error: Root model 'Model' not found."
+        Exit Sub
+    End If
+
+    ' Find "Architecture Development Method"
+    Dim admPackage As EA.Package
+    Set admPackage = findPackageByName(rootModel, "Architecture Development Method")
+    If admPackage Is Nothing Then
+        Session.Output "Error: Architecture Development Method package not found."
+        Exit Sub
+    End If
+
+    ' Find or create Phase F package
+    Dim phaseFPackage As EA.Package
+    Set phaseFPackage = findPackageByName(admPackage, "Phase F")
+    If phaseFPackage Is Nothing Then
+        Set phaseFPackage = admPackage.Packages.AddNew("Phase F", "Package")
+        phaseFPackage.Update
+    End If
+
+    ' Check/Create Risk Mitigation Diagram
+    Dim riskDiagram As EA.Diagram
+    Set riskDiagram = Nothing
+    For i = 0 To phaseFPackage.Diagrams.Count - 1
+        Dim diag As EA.Diagram
+        Set diag = phaseFPackage.Diagrams.GetAt(i)
+        If diag.Name = "Risk Mitigation Diagram" Then
+            Set riskDiagram = diag
+            Exit For
+        End If
+    Next
+    If riskDiagram Is Nothing Then
+        Set riskDiagram = phaseFPackage.Diagrams.AddNew("Risk Mitigation Diagram", "Component")
+        riskDiagram.Notes = "Phase F: Visualizes key risks and mitigation strategies."
+        riskDiagram.Update
+    End If
+
+    ' Define elements for key risks and mitigations (from doc Section 5.2)
+    Dim elements(6), stereotypes(6), types(6), colors(6), sizes(6), notes(6), elObjs(6)
+    elements(0) = "Risk: Integration Complexity": stereotypes(0) = "Risk": types(0) = "Issue": colors(0) = RGB(255,0,0): sizes(0) = "l=150;r=400;t=100;b=50": notes(0) = "Complex integration of heterogeneous systems."
+    elements(1) = "Mitigation: Pilot APIs": stereotypes(1) = "Mitigation": types(1) = "Requirement": colors(1) = RGB(112,173,71): sizes(1) = "l=450;r=700;t=100;b=50": notes(1) = "Robust pilot testing, API middleware."
+    elements(2) = "Risk: Operational Downtime": stereotypes(2) = "Risk": types(2) = "Issue": colors(2) = RGB(255,0,0): sizes(2) = "l=150;r=400;t=200;b=150": notes(2) = "Potential downtime during cut-over."
+    elements(3) = "Mitigation: Parallel Operations": stereotypes(3) = "Mitigation": types(3) = "Requirement": colors(3) = RGB(112,173,71): sizes(3) = "l=450;r=700;t=200;b=150": notes(3) = "Parallel legacy and target systems."
+    elements(4) = "Risk: Compliance (multi-region)": stereotypes(4) = "Risk": types(4) = "Issue": colors(4) = RGB(255,0,0): sizes(4) = "l=150;r=400;t=300;b=250": notes(4) = "Non-compliance in multiple jurisdictions."
+    elements(5) = "Mitigation: Early Regulator Engagement": stereotypes(5) = "Mitigation": types(5) = "Requirement": colors(5) = RGB(112,173,71): sizes(5) = "l=450;r=700;t=300;b=250": notes(5) = "Local compliance, early involvement."
+
+    ' Create elements
+    For i = 0 To 5
+        Dim elem As EA.Element
+        Set elem = phaseFPackage.Elements.AddNew(elements(i), types(i))
+        elem.Stereotype = stereotypes(i)
+        elem.Notes = notes(i)
+        elem.Update
+        Set elObjs(i) = elem
+    Next
+
+    ' Add to diagram and set color
+    Dim diagObjects As EA.Collection
+    Set diagObjects = riskDiagram.DiagramObjects
+    For i = 0 To 5
+        Dim diagObj As EA.DiagramObject
+        Set diagObj = diagObjects.AddNew(sizes(i) & ";", "")
+        diagObj.ElementID = elObjs(i).ElementID
+        diagObj.BackgroundColor = colors(i)
+        diagObj.Update
+    Next
+
+    ' Link each mitigation to the relevant risk
+    Dim connectors As EA.Collection
+    Set connectors = phaseFPackage.Connectors
+    Dim conn As EA.Connector
+
+    Set conn = connectors.AddNew("", "Mitigates")
+    conn.SupplierID = elObjs(1).ElementID
+    conn.ClientID = elObjs(0).ElementID
+    conn.Name = "Mitigates"
+    conn.Update
+
+    Set conn = connectors.AddNew("", "Mitigates")
+    conn.SupplierID = elObjs(3).ElementID
+    conn.ClientID = elObjs(2).ElementID
+    conn.Name = "Mitigates"
+    conn.Update
+
+    Set conn = connectors.AddNew("", "Mitigates")
+    conn.SupplierID = elObjs(5).ElementID
+    conn.ClientID = elObjs(4).ElementID
+    conn.Name = "Mitigates"
+    conn.Update
+
+    ' Refresh
+    Repository.RefreshModelView phaseFPackage.PackageID
+    riskDiagram.Update
+    Repository.ReloadDiagram riskDiagram.DiagramID
+
+    Session.Output "Risk Mitigation Diagram created under Phase F."
+    Session.Output "Done!"
+End Sub
+
+' Recursive function to find a package by name
+Function findPackageByName(parentPackage, targetName)
+    Dim i, pkg, found
+    Set findPackageByName = Nothing
+    For i = 0 To parentPackage.Packages.Count - 1
+        Set pkg = parentPackage.Packages.GetAt(i)
+        If pkg.Name = targetName Then
+            Set findPackageByName = pkg
+            Exit Function
+        End If
+        Set found = findPackageByName(pkg, targetName)
+        If Not found Is Nothing Then
+            Set findPackageByName = found
+            Exit Function
+        End If
+    Next
+End Function
+
+CreatePhaseFRiskMitigationDiagram

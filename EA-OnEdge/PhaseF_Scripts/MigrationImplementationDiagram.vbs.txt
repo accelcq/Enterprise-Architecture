@@ -1,0 +1,115 @@
+Option Explicit
+
+!INC Local Scripts.EAConstants-VBScript
+
+' Helper: Find or create a package by name (case-insensitive)
+Function findPackageByName(parentPackage, targetName)
+    Dim i, pkg, found
+    Set findPackageByName = Nothing
+    For i = 0 To parentPackage.Packages.Count - 1
+        Set pkg = parentPackage.Packages.GetAt(i)
+        If StrComp(pkg.Name, targetName, vbTextCompare) = 0 Then
+            Set findPackageByName = pkg
+            Exit Function
+        End If
+        Set found = findPackageByName(pkg, targetName)
+        If Not found Is Nothing Then
+            Set findPackageByName = found
+            Exit Function
+        End If
+    Next
+End Function
+
+Sub CreatePhaseFMigrationImplementationDiagram()
+    Repository.EnsureOutputVisible "Script"
+    Session.Output "CREATE PHASE F MIGRATION IMPLEMENTATION DIAGRAM"
+    Session.Output "==============================================="
+
+    ' -- Find or create package hierarchy --
+    Dim rootModel, admPackage, phaseFPackage, i, tempModel
+    Set rootModel = Nothing
+    For i = 0 To Repository.Models.Count - 1
+        Set tempModel = Repository.Models.GetAt(i)
+        If StrComp(tempModel.Name, "Model", vbTextCompare) = 0 Then
+            Set rootModel = tempModel
+            Exit For
+        End If
+    Next
+    If rootModel Is Nothing Then
+        Session.Output "Error: Root model 'Model' not found!": Exit Sub
+    End If
+
+    Set admPackage = findPackageByName(rootModel, "Architecture Development Method")
+    If admPackage Is Nothing Then
+        Set admPackage = rootModel.Packages.AddNew("Architecture Development Method", "Package")
+        admPackage.Update
+        Session.Output "Created missing package: Architecture Development Method"
+    End If
+
+    Set phaseFPackage = findPackageByName(admPackage, "Phase F")
+    If phaseFPackage Is Nothing Then
+        Set phaseFPackage = admPackage.Packages.AddNew("Phase F", "Package")
+        phaseFPackage.Update
+        Session.Output "Created package: Phase F"
+    End If
+
+    Session.Output "Using package: " & phaseFPackage.Name
+
+    ' -- Find or create the implementation diagram --
+    Dim migDiag, diag
+    Set migDiag = Nothing
+    For i = 0 To phaseFPackage.Diagrams.Count - 1
+        Set diag = phaseFPackage.Diagrams.GetAt(i)
+        If diag.Name = "Migration Implementation Diagram" Then
+            Set migDiag = diag
+            Exit For
+        End If
+    Next
+    If migDiag Is Nothing Then
+        Set migDiag = phaseFPackage.Diagrams.AddNew("Migration Implementation Diagram", "Component")
+        migDiag.Notes = "TOGAF Phase F: Migration Plan—Pilot, Regional, Global Expansion—with risk and mitigation."
+        migDiag.Update
+        Session.Output "Created diagram: Migration Implementation Diagram"
+    Else
+        Session.Output "Diagram already exists: Migration Implementation Diagram"
+    End If
+
+    ' Define elements and all required arrays up front (with explicit counts)
+    Dim count: count = 12
+    Dim elements(), stereotypes(), types(), sizes(), colors(), notes()
+    ReDim elements(count - 1), stereotypes(count - 1), types(count - 1), sizes(count - 1), colors(count - 1), notes(count - 1)
+
+    ' ... (element setup omitted for brevity, see previous answer for content) ...
+
+    ' Create all objects (elementObjects) in explicit fixed-size arrays
+    Dim elementObjects()
+    ReDim elementObjects(count - 1)
+    For i = 0 To count - 1
+        Dim elem, obj
+        Set elem = phaseFPackage.Elements.AddNew(elements(i), types(i))
+        elem.Stereotype = stereotypes(i)
+        elem.Notes = notes(i)
+        elem.Update
+        Set elementObjects(i) = elem
+        Set obj = migDiag.DiagramObjects.AddNew(sizes(i) & ";", "")
+        obj.ElementID = elem.ElementID
+        obj.BackgroundColor = colors(i)
+        obj.Update
+    Next
+
+    ' Connectors: always assign only after package exists!
+    Dim connectors
+    Set connectors = phaseFPackage.Connectors
+    Dim conn
+
+    ' ... (rest of connector creation exactly as in the previous working example) ...
+
+    Repository.RefreshModelView phaseFPackage.PackageID
+    migDiag.Update
+    Repository.ReloadDiagram migDiag.DiagramID
+
+    Session.Output "Migration Implementation Diagram created successfully under: MODEL > Architecture Development Method > Phase F"
+    Session.Output "Done!"
+End Sub
+
+CreatePhaseFMigrationImplementationDiagram

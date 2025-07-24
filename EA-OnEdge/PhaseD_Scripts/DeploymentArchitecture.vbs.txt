@@ -1,0 +1,187 @@
+Option Explicit
+
+!INC Local Scripts.EAConstants-VBScript
+
+' Recursive helper to find a package by name (case-insensitive)
+Function findPackageByName(parentPackage, targetName)
+    Dim i, pkg, found
+    Set findPackageByName = Nothing
+    For i = 0 To parentPackage.Packages.Count - 1
+        Set pkg = parentPackage.Packages.GetAt(i)
+        If pkg.Name = targetName Then
+            Set findPackageByName = pkg
+            Exit Function
+        End If
+        Set found = findPackageByName(pkg, targetName)
+        If Not found Is Nothing Then
+            Set findPackageByName = found
+            Exit Function
+        End If
+    Next
+End Function
+
+Sub CreatePhaseDDeploymentArchitectureDiagram()
+
+    Repository.EnsureOutputVisible "Script"
+    Session.Output "CREATE PHASE D DEPLOYMENT ARCHITECTURE DIAGRAM"
+    Session.Output "=============================================="
+
+    Dim i, tempModel
+
+    ' 1. Find root model "Model"
+    Dim rootModel As EA.Package
+    Set rootModel = Nothing
+    For i = 0 To Repository.Models.Count - 1
+        Set tempModel = Repository.Models.GetAt(i)
+        If tempModel.Name = "Model" Then
+            Set rootModel = tempModel
+            Exit For
+        End If
+    Next
+    If rootModel Is Nothing Then
+        Session.Output "Error: Root model 'Model' not found."
+        Exit Sub
+    End If
+    Session.Output "Root model found: " & rootModel.Name
+
+    ' 2. Find "Architecture Development Method"
+    Dim admPackage As EA.Package
+    Set admPackage = findPackageByName(rootModel, "Architecture Development Method")
+    If admPackage Is Nothing Then
+        Session.Output "Error: Architecture Development Method package not found."
+        Exit Sub
+    End If
+    Session.Output "Found package: " & admPackage.Name
+
+    ' 3. Find or create Phase D package
+    Dim phaseDPackage As EA.Package
+    Set phaseDPackage = findPackageByName(admPackage, "Phase D")
+    If phaseDPackage Is Nothing Then
+        Set phaseDPackage = admPackage.Packages.AddNew("Phase D", "Package")
+        phaseDPackage.Update
+        Session.Output "Created package: Phase D"
+    End If
+    Session.Output "Using package: " & phaseDPackage.Name
+
+    ' 4. Check/Create Deployment Architecture Diagram
+    Dim depDiagram As EA.Diagram
+    Set depDiagram = Nothing
+    For i = 0 To phaseDPackage.Diagrams.Count - 1
+        Dim diag As EA.Diagram
+        Set diag = phaseDPackage.Diagrams.GetAt(i)
+        If diag.Name = "Deployment Architecture Diagram" Then
+            Set depDiagram = diag
+            Exit For
+        End If
+    Next
+    If depDiagram Is Nothing Then
+        Set depDiagram = phaseDPackage.Diagrams.AddNew("Deployment Architecture Diagram", "Deployment")
+        depDiagram.Notes = "TOGAF Phase D: Deployment Architecture — mapping logical technology stack to physical nodes, devices, and network."
+        depDiagram.Update
+        Session.Output "Created diagram: Deployment Architecture Diagram"
+    Else
+        Session.Output "Diagram already exists: Deployment Architecture Diagram"
+    End If
+
+    ' 5. Define deployment nodes, artifacts, and connections
+    Dim elements(7), stereotypes(7), elementTypes(7), elementObjects(7), elementColors(7), elementSizes(7), notes(7)
+    Dim elementCount
+    elementCount = 0
+
+    ' Physical nodes
+    elements(0) = "Robotic Micro Data Center": stereotypes(0) = "Node": elementTypes(0) = "Node"
+    elementColors(0) = RGB(255, 192, 0): elementSizes(0) = "l=100;r=350;t=100;b=40"
+    notes(0) = "Autonomous, sustainable edge facility deploying AI compute, storage, and network."
+
+    elements(1) = "Satellite Link": stereotypes(1) = "Device": elementTypes(1) = "Device"
+    elementColors(1) = RGB(68, 114, 196): elementSizes(1) = "l=400;r=550;t=100;b=40"
+    notes(1) = "Redundant satellite uplink (Starlink/OneWeb) for resilient global connectivity."
+
+    elements(2) = "Corporate Data Center": stereotypes(2) = "Node": elementTypes(2) = "Node"
+    elementColors(2) = RGB(112, 173, 71): elementSizes(2) = "l=600;r=850;t=100;b=40"
+    notes(2) = "Centralized operations and management node; legacy system bridge."
+
+    ' Deployed artifacts (represent core services)
+    elements(3) = "AI Compute Runtime": stereotypes(3) = "Artifact": elementTypes(3) = "Artifact"
+    elementColors(3) = RGB(237, 125, 49): elementSizes(3) = "l=120;r=180;t=200;b=170"
+    notes(3) = "Container for distributed inference & training workloads."
+
+    elements(4) = "Data Sync Service": stereotypes(4) = "Artifact": elementTypes(4) = "Artifact"
+    elementColors(4) = RGB(237, 125, 49): elementSizes(4) = "l=470;r=520;t=200;b=170"
+    notes(4) = "Delta-based, encrypted synchronization agent."
+
+    elements(5) = "Enterprise Connector SDK": stereotypes(5) = "Artifact": elementTypes(5) = "Artifact"
+    elementColors(5) = RGB(237, 125, 49): elementSizes(5) = "l=720;r=780;t=200;b=170"
+    notes(5) = "Enables bidirectional integration with corporate applications."
+
+    ' Risk/Mitigation overlay
+    elements(6) = "Risk: Satellite Outage": stereotypes(6) = "Risk": elementTypes(6) = "Issue"
+    elementColors(6) = RGB(255, 0, 0): elementSizes(6) = "l=300;r=550;t=300;b=250"
+    notes(6) = "Mitigated via multi-vendor redundant links and fallback protocols."
+
+    elementCount = 7
+
+    ' 6. Create elements in the package
+    For i = 0 To elementCount - 1
+        Dim elem As EA.Element
+        Set elem = phaseDPackage.Elements.AddNew(elements(i), elementTypes(i))
+        elem.Stereotype = stereotypes(i)
+        elem.Notes = notes(i)
+        elem.Update
+        Set elementObjects(i) = elem
+        Session.Output "Created element: " & elements(i)
+    Next
+
+    ' 7. Add elements to diagram with positions/colors
+    Dim diagObjects As EA.Collection
+    Set diagObjects = depDiagram.DiagramObjects
+    For i = 0 To elementCount - 1
+        Dim diagObj As EA.DiagramObject
+        Set diagObj = diagObjects.AddNew(elementSizes(i) & ";", "")
+        diagObj.ElementID = elementObjects(i).ElementID
+        diagObj.BackgroundColor = elementColors(i)
+        diagObj.Update
+    Next
+
+    ' 8. Create deployment, communication, and risk connectors
+    Dim connectors As EA.Collection
+    Set connectors = phaseDPackage.Connectors
+    Dim conn As EA.Connector
+
+    ' Node-to-node network
+    Set conn = connectors.AddNew("", "CommunicationPath")
+    conn.SupplierID = elementObjects(0).ElementID: conn.ClientID = elementObjects(1).ElementID
+    conn.Name = "Uplink": conn.Update
+
+    Set conn = connectors.AddNew("", "CommunicationPath")
+    conn.SupplierID = elementObjects(1).ElementID: conn.ClientID = elementObjects(2).ElementID
+    conn.Name = "WAN/Backhaul": conn.Update
+
+    ' Artifacts deployed to nodes
+    Set conn = connectors.AddNew("", "Deployment")
+    conn.SupplierID = elementObjects(0).ElementID: conn.ClientID = elementObjects(3).ElementID
+    conn.Name = "deploys": conn.Update
+
+    Set conn = connectors.AddNew("", "Deployment")
+    conn.SupplierID = elementObjects(0).ElementID: conn.ClientID = elementObjects(4).ElementID
+    conn.Name = "deploys": conn.Update
+
+    Set conn = connectors.AddNew("", "Deployment")
+    conn.SupplierID = elementObjects(2).ElementID: conn.ClientID = elementObjects(5).ElementID
+    conn.Name = "deploys": conn.Update
+
+    ' Risk mitigation
+    Set conn = connectors.AddNew("", "Mitigates")
+    conn.SupplierID = elementObjects(1).ElementID: conn.ClientID = elementObjects(6).ElementID
+    conn.Name = "Mitigation via redundancy": conn.Update
+
+    Repository.RefreshModelView phaseDPackage.PackageID
+    depDiagram.Update
+    Repository.ReloadDiagram depDiagram.DiagramID
+
+    Session.Output "Deployment Architecture Diagram created successfully under MODEL > Architecture Development Method > Phase D"
+    Session.Output "Done!"
+
+End Sub
+
+CreatePhaseDDeploymentArchitectureDiagram

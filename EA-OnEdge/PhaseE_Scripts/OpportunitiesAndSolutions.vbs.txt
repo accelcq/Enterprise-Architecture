@@ -1,0 +1,198 @@
+Option Explicit
+
+!INC Local Scripts.EAConstants-VBScript
+
+Sub CreatePhaseEOpportunitiesSolutionsDiagram()
+
+    Repository.EnsureOutputVisible "Script"
+    Session.Output "VBScript CREATE PHASE E OPPORTUNITIES & SOLUTIONS DIAGRAM"
+    Session.Output "======================================="
+
+    ' Find the root model "Model"
+    Dim rootModel As EA.Package
+    Set rootModel = Nothing
+
+    Dim i
+    For i = 0 To Repository.Models.Count - 1
+        Dim tempModel As EA.Package
+        Set tempModel = Repository.Models.GetAt(i)
+        If tempModel.Name = "Model" Then
+            Set rootModel = tempModel
+            Exit For
+        End If
+    Next
+
+    If rootModel Is Nothing Then
+        Session.Output "Error: Root model 'Model' not found."
+        Exit Sub
+    End If
+
+    ' Find the "Architecture Development Method" package
+    Dim admPackage As EA.Package
+    Set admPackage = findPackageByName(rootModel, "Architecture Development Method")
+    If admPackage Is Nothing Then
+        Session.Output "Error: Architecture Development Method package not found."
+        Exit Sub
+    End If
+
+    ' Find or create the "Phase E" package
+    Dim phaseEPackage As EA.Package
+    Set phaseEPackage = findPackageByName(admPackage, "Phase E")
+    If phaseEPackage Is Nothing Then
+        Set phaseEPackage = admPackage.Packages.AddNew("Phase E", "Package")
+        phaseEPackage.Update
+        Session.Output "Created package: Phase E"
+    End If
+    Session.Output "Using package: " & phaseEPackage.Name
+
+    ' Check for existing Opportunities & Solutions Diagram
+    Dim oppSolDiagram As EA.Diagram
+    Set oppSolDiagram = Nothing
+    For i = 0 To phaseEPackage.Diagrams.Count - 1
+        Dim diag As EA.Diagram
+        Set diag = phaseEPackage.Diagrams.GetAt(i)
+        If diag.Name = "Opportunities & Solutions" Then
+            Set oppSolDiagram = diag
+            Exit For
+        End If
+    Next
+
+    ' Create the diagram if it doesn't exist
+    If oppSolDiagram Is Nothing Then
+        Set oppSolDiagram = phaseEPackage.Diagrams.AddNew("Opportunities & Solutions", "Component")
+        If Not oppSolDiagram Is Nothing Then
+            oppSolDiagram.Notes = "Phase E diagram showing implementation projects, work packages, interdependencies, migration steps."
+            oppSolDiagram.Update
+            Session.Output "Created diagram: Opportunities & Solutions"
+        Else
+            Session.Output "Error: Failed to create Opportunities & Solutions diagram."
+            Exit Sub
+        End If
+    Else
+        Session.Output "Diagram already exists: Opportunities & Solutions"
+    End If
+
+    ' Define elements: (adjust as needed for your solution)
+    Dim elements(4), stereotypes(4), elementTypes(4), elementObjects(4), elementColors(4), elementSizes(4), elementCount
+    elementCount = 0
+
+    elements(0) = "Micro Data Center Rollout": stereotypes(0) = "WorkPackage": elementTypes(0) = "Component": elementColors(0) = RGB(51,204,51): elementSizes(0) = "l=50;r=200;t=100;b=50": elementCount = elementCount + 1
+    elements(1) = "Satellite Connectivity Integration": stereotypes(1) = "WorkPackage": elementTypes(1) = "Component": elementColors(1) = RGB(255,204,51): elementSizes(1) = "l=250;r=400;t=100;b=50": elementCount = elementCount + 1
+    elements(2) = "Autonomous Operations Automation": stereotypes(2) = "WorkPackage": elementTypes(2) = "Component": elementColors(2) = RGB(51,153,255): elementSizes(2) = "l=450;r=600;t=100;b=50": elementCount = elementCount + 1
+    elements(3) = "Phase I Pilot": stereotypes(3) = "Project": elementTypes(3) = "Component": elementColors(3) = RGB(204,0,0): elementSizes(3) = "l=100;r=300;t=250;b=200": elementCount = elementCount + 1
+    elements(4) = "Phase II Scale-Up": stereotypes(4) = "Project": elementTypes(4) = "Component": elementColors(4) = RGB(153,0,204): elementSizes(4) = "l=350;r=550;t=250;b=200": elementCount = elementCount + 1
+
+    ' Create elements in the package
+    Dim elem, j
+    For j = 0 To elementCount - 1
+        Set elem = phaseEPackage.Elements.AddNew(elements(j), elementTypes(j))
+        If Not elem Is Nothing Then
+            elem.Stereotype = stereotypes(j)
+            If elements(j) = "Micro Data Center Rollout" Then
+                elem.Notes = "Deployment of containerized micro data centers globally."
+            ElseIf elements(j) = "Satellite Connectivity Integration" Then
+                elem.Notes = "Implementation of resilient broadband through satellite links (e.g. Starlink)."
+            ElseIf elements(j) = "Autonomous Operations Automation" Then
+                elem.Notes = "Robotics/AI-driven operational control across remote sites."
+            ElseIf elements(j) = "Phase I Pilot" Then
+                elem.Notes = "Initial pilot implementation at select sites to validate design."
+            ElseIf elements(j) = "Phase II Scale-Up" Then
+                elem.Notes = "Expansion to additional regions, optimizing based on lessons learned."
+            End If
+            elem.Update
+            Set elementObjects(j) = elem
+            Session.Output "Created element: " & elements(j)
+        Else
+            Session.Output "Error: Failed to create element: " & elements(j)
+            Exit Sub
+        End If
+    Next
+
+    ' Add elements to the diagram with positioning and colors
+    Dim diagObjects As EA.Collection
+    Set diagObjects = oppSolDiagram.DiagramObjects
+    For j = 0 To elementCount - 1
+        Dim diagObj As EA.DiagramObject
+        Set diagObj = diagObjects.AddNew(elementSizes(j) & ";", "")
+        diagObj.ElementID = elementObjects(j).ElementID
+        diagObj.BackgroundColor = elementColors(j)
+        diagObj.Update
+    Next
+
+    ' Define relationships (dependencies and realization)
+    Dim connectors As EA.Collection
+    Set connectors = phaseEPackage.Connectors
+    Dim diagLinks As EA.Collection
+    Set diagLinks = oppSolDiagram.DiagramLinks
+    Dim conn As EA.Connector
+    Dim link As EA.DiagramLink
+
+    ' Example relationships:
+    ' Work Packages are inputs to pilot/project phases
+    Set conn = connectors.AddNew("", "Dependency")
+    conn.SupplierID = elementObjects(0).ElementID ' Micro Data Center Rollout
+    conn.ClientID = elementObjects(3).ElementID ' Phase I Pilot
+    conn.Name = "Input To"
+    conn.Update
+    Set link = diagLinks.AddNew("", "")
+    link.ConnectorID = conn.ConnectorID
+    link.Update
+
+    Set conn = connectors.AddNew("", "Dependency")
+    conn.SupplierID = elementObjects(1).ElementID ' Satellite Connectivity Integration
+    conn.ClientID = elementObjects(3).ElementID ' Phase I Pilot
+    conn.Name = "Input To"
+    conn.Update
+    Set link = diagLinks.AddNew("", "")
+    link.ConnectorID = conn.ConnectorID
+    link.Update
+
+    Set conn = connectors.AddNew("", "Dependency")
+    conn.SupplierID = elementObjects(2).ElementID ' Autonomous Operations Automation
+    conn.ClientID = elementObjects(4).ElementID ' Phase II Scale-Up
+    conn.Name = "Prerequisite For"
+    conn.Update
+    Set link = diagLinks.AddNew("", "")
+    link.ConnectorID = conn.ConnectorID
+    link.Update
+
+    Set conn = connectors.AddNew("", "Dependency")
+    conn.SupplierID = elementObjects(3).ElementID ' Phase I Pilot
+    conn.ClientID = elementObjects(4).ElementID ' Phase II Scale-Up
+    conn.Name = "Feeds Into"
+    conn.Update
+    Set link = diagLinks.AddNew("", "")
+    link.ConnectorID = conn.ConnectorID
+    link.Update
+
+    ' Refresh and finish
+    Repository.RefreshModelView phaseEPackage.PackageID
+    oppSolDiagram.Update
+    Repository.ReloadDiagram oppSolDiagram.DiagramID
+    Session.Output "Phase E Opportunities & Solutions diagram created successfully under MODEL > Architecture Development Method > Phase E"
+    Session.Output "Done!"
+
+End Sub
+
+' Recursive function to find package by name
+Function findPackageByName(parentPackage, targetName)
+    Dim i, pkg
+    Set findPackageByName = Nothing
+    For i = 0 To parentPackage.Packages.Count - 1
+        Set pkg = parentPackage.Packages.GetAt(i)
+        If pkg.Name = targetName Then
+            Set findPackageByName = pkg
+            Exit For
+        End If
+        Dim subPackage
+        Set subPackage = findPackageByName(pkg, targetName)
+        If Not subPackage Is Nothing Then
+            Set findPackageByName = subPackage
+            Exit For
+        End If
+    Next
+End Function
+
+' Execute the main function
+CreatePhaseEOpportunitiesSolutionsDiagram
+

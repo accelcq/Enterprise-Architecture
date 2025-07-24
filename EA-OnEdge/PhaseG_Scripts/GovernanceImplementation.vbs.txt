@@ -1,0 +1,145 @@
+Option Explicit
+
+!INC Local Scripts.EAConstants-VBScript
+
+Sub CreatePhaseGImplementationGovernanceDiagram()
+
+    Repository.EnsureOutputVisible "Script"
+    Session.Output "VBScript CREATE PHASE G IMPLEMENTATION GOVERNANCE DIAGRAM"
+    Session.Output "========================================================"
+
+    Dim i, tempModel
+
+    ' Find root model "Model"
+    Dim rootModel As EA.Package
+    Set rootModel = Nothing
+    For i = 0 To Repository.Models.Count - 1
+        Set tempModel = Repository.Models.GetAt(i)
+        If tempModel.Name = "Model" Then
+            Set rootModel = tempModel
+            Exit For
+        End If
+    Next
+    If rootModel Is Nothing Then
+        Session.Output "Error: Root model 'Model' not found."
+        Exit Sub
+    End If
+
+    ' Find "Architecture Development Method"
+    Dim admPackage As EA.Package
+    Set admPackage = findPackageByName(rootModel, "Architecture Development Method")
+    If admPackage Is Nothing Then
+        Session.Output "Error: Architecture Development Method package not found."
+        Exit Sub
+    End If
+
+    ' Find or create Phase G package
+    Dim phaseGPackage As EA.Package
+    Set phaseGPackage = findPackageByName(admPackage, "Phase G")
+    If phaseGPackage Is Nothing Then
+        Set phaseGPackage = admPackage.Packages.AddNew("Phase G", "Package")
+        phaseGPackage.Update
+        Session.Output "Created package: Phase G"
+    End If
+
+    ' Check/Create Implementation Governance Diagram
+    Dim govDiagram As EA.Diagram
+    Set govDiagram = Nothing
+    For i = 0 To phaseGPackage.Diagrams.Count - 1
+        Dim diag As EA.Diagram
+        Set diag = phaseGPackage.Diagrams.GetAt(i)
+        If diag.Name = "Implementation Governance Diagram" Then
+            Set govDiagram = diag
+            Exit For
+        End If
+    Next
+    If govDiagram Is Nothing Then
+        Set govDiagram = phaseGPackage.Diagrams.AddNew("Implementation Governance Diagram", "Component")
+        govDiagram.Notes = "Phase G: Governance structure, implementation oversight, and escalation flows."
+        govDiagram.Update
+        Session.Output "Created diagram: Implementation Governance Diagram"
+    Else
+        Session.Output "Diagram already exists: Implementation Governance Diagram"
+    End If
+
+    ' Governance elements
+    Dim elements(5), stereotypes(5), types(5), colors(5), sizes(5), notes(5), objs(5)
+    elements(0) = "Executive Steering Committee": stereotypes(0) = "Role": types(0) = "Actor": colors(0) = RGB(237, 125, 49): sizes(0) = "l=100;r=320;t=50;b=10": notes(0) = "Strategic oversight, resource allocation, escalation."
+    elements(1) = "Implementation Governance Board": stereotypes(1) = "Role": types(1) = "Actor": colors(1) = RGB(91, 155, 213): sizes(1) = "l=380;r=600;t=120;b=80": notes(1) = "Operational tracking and project alignment."
+    elements(2) = "Architecture Review Board": stereotypes(2) = "Role": types(2) = "Actor": colors(2) = RGB(112, 173, 71): sizes(2) = "l=100;r=320;t=200;b=160": notes(2) = "Conformance and change control."
+    elements(3) = "Risk & Compliance Committee": stereotypes(3) = "Role": types(3) = "Actor": colors(3) = RGB(255, 192, 0): sizes(3) = "l=380;r=600;t=200;b=160": notes(3) = "Risk and compliance management."
+    elements(4) = "Implementation Project Teams": stereotypes(4) = "Team": types(4) = "Actor": colors(4) = RGB(68, 114, 196): sizes(4) = "l=240;r=460;t=300;b=260": notes(4) = "Project execution and daily monitoring."
+    Dim elementCount: elementCount = 5
+
+    For i = 0 To elementCount - 1
+        Dim elem As EA.Element
+        Set elem = phaseGPackage.Elements.AddNew(elements(i), types(i))
+        elem.Stereotype = stereotypes(i)
+        elem.Notes = notes(i)
+        elem.Update
+        Set objs(i) = elem
+    Next
+
+    Dim diagObjects As EA.Collection
+    Set diagObjects = govDiagram.DiagramObjects
+    For i = 0 To elementCount - 1
+        Dim diagObj As EA.DiagramObject
+        Set diagObj = diagObjects.AddNew(sizes(i) & ";", "")
+        diagObj.ElementID = objs(i).ElementID
+        diagObj.BackgroundColor = colors(i)
+        diagObj.Update
+    Next
+
+    Dim connectors As EA.Collection
+    Set connectors = phaseGPackage.Connectors
+    Dim conn As EA.Connector
+
+    ' Decision and escalation lines (arrows show oversight and escalation)
+    Set conn = connectors.AddNew("", "Association")
+    conn.SupplierID = objs(4).ElementID: conn.ClientID = objs(1).ElementID
+    conn.Name = "Status, Escalation": conn.Update
+
+    Set conn = connectors.AddNew("", "Association")
+    conn.SupplierID = objs(1).ElementID: conn.ClientID = objs(0).ElementID
+    conn.Name = "Escalates to": conn.Update
+
+    Set conn = connectors.AddNew("", "Association")
+    conn.SupplierID = objs(4).ElementID: conn.ClientID = objs(2).ElementID
+    conn.Name = "Change/Design Review": conn.Update
+
+    Set conn = connectors.AddNew("", "Association")
+    conn.SupplierID = objs(1).ElementID: conn.ClientID = objs(3).ElementID
+    conn.Name = "Escalate Risk/Compliance": conn.Update
+
+    Set conn = connectors.AddNew("", "Association")
+    conn.SupplierID = objs(4).ElementID: conn.ClientID = objs(3).ElementID
+    conn.Name = "Risk Reporting": conn.Update
+
+    Repository.RefreshModelView phaseGPackage.PackageID
+    govDiagram.Update
+    Repository.ReloadDiagram govDiagram.DiagramID
+
+    Session.Output "Implementation Governance Diagram created successfully under MODEL > Architecture Development Method > Phase G"
+    Session.Output "Done!"
+
+End Sub
+
+' Recursive function to find a package by name
+Function findPackageByName(parentPackage, targetName)
+    Dim i, pkg, found
+    Set findPackageByName = Nothing
+    For i = 0 To parentPackage.Packages.Count - 1
+        Set pkg = parentPackage.Packages.GetAt(i)
+        If pkg.Name = targetName Then
+            Set findPackageByName = pkg
+            Exit Function
+        End If
+        Set found = findPackageByName(pkg, targetName)
+        If Not found Is Nothing Then
+            Set findPackageByName = found
+            Exit Function
+        End If
+    Next
+End Function
+
+CreatePhaseGImplementationGovernanceDiagram

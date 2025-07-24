@@ -1,0 +1,133 @@
+Option Explicit
+
+!INC Local Scripts.EAConstants-VBScript
+
+Sub CreatePhaseGStatusReportingDiagram()
+
+    Repository.EnsureOutputVisible "Script"
+    Session.Output "VBScript CREATE PHASE G STATUS REPORTING DIAGRAM"
+    Session.Output "==============================================="
+
+    Dim i, tempModel
+
+    ' Find root model "Model"
+    Dim rootModel As EA.Package
+    Set rootModel = Nothing
+    For i = 0 To Repository.Models.Count - 1
+        Set tempModel = Repository.Models.GetAt(i)
+        If tempModel.Name = "Model" Then
+            Set rootModel = tempModel
+            Exit For
+        End If
+    Next
+    If rootModel Is Nothing Then
+        Session.Output "Error: Root model 'Model' not found."
+        Exit Sub
+    End If
+
+    ' Find "Architecture Development Method"
+    Dim admPackage As EA.Package
+    Set admPackage = findPackageByName(rootModel, "Architecture Development Method")
+    If admPackage Is Nothing Then
+        Session.Output "Error: Architecture Development Method package not found."
+        Exit Sub
+    End If
+
+    ' Find or create Phase G package
+    Dim phaseGPackage As EA.Package
+    Set phaseGPackage = findPackageByName(admPackage, "Phase G")
+    If phaseGPackage Is Nothing Then
+        Set phaseGPackage = admPackage.Packages.AddNew("Phase G", "Package")
+        phaseGPackage.Update
+    End If
+
+    ' Check/Create Status Reporting Diagram
+    Dim statDiagram As EA.Diagram
+    Set statDiagram = Nothing
+    For i = 0 To phaseGPackage.Diagrams.Count - 1
+        Dim diag As EA.Diagram
+        Set diag = phaseGPackage.Diagrams.GetAt(i)
+        If diag.Name = "Status Reporting Diagram" Then
+            Set statDiagram = diag
+            Exit For
+        End If
+    Next
+    If statDiagram Is Nothing Then
+        Set statDiagram = phaseGPackage.Diagrams.AddNew("Status Reporting Diagram", "Custom")
+        statDiagram.Notes = "Phase G: Project implementation status, escalation and KPI reporting flows."
+        statDiagram.Update
+    End If
+
+    ' Define reporting elements
+    Dim elements(3), stereotypes(3), types(3), colors(3), sizes(3), notes(3), objs(3)
+    elements(0) = "Implementation Project Team": stereotypes(0) = "Team": types(0) = "Actor": colors(0) = RGB(68,114,196): sizes(0) = "l=100;r=320;t=100;b=50": notes(0) = "Executes project, provides regular status."
+    elements(1) = "Governance Board": stereotypes(1) = "Role": types(1) = "Actor": colors(1) = RGB(237, 125, 49): sizes(1) = "l=350;r=570;t=200;b=150": notes(1) = "Receives status reports, reviews issues."
+    elements(2) = "KPI/Compliance Report": stereotypes(2) = "Deliverable": types(2) = "Requirement": colors(2) = RGB(255, 192, 0): sizes(2) = "l=100;r=320;t=300;b=250": notes(2) = "Compiled metrics: timelines, uptime, incidents, budgets."
+    Dim elementCount: elementCount = 3
+
+    For i = 0 To elementCount - 1
+        Dim elem As EA.Element
+        Set elem = phaseGPackage.Elements.AddNew(elements(i), types(i))
+        elem.Stereotype = stereotypes(i)
+        elem.Notes = notes(i)
+        elem.Update
+        Set objs(i) = elem
+    Next
+
+    Dim diagObjects As EA.Collection
+    Set diagObjects = statDiagram.DiagramObjects
+    For i = 0 To elementCount - 1
+        Dim diagObj As EA.DiagramObject
+        Set diagObj = diagObjects.AddNew(sizes(i) & ";", "")
+        diagObj.ElementID = objs(i).ElementID
+        diagObj.BackgroundColor = colors(i)
+        diagObj.Update
+    Next
+
+    Dim connectors As EA.Collection
+    Set connectors = phaseGPackage.Connectors
+    Dim conn As EA.Connector
+
+    Set conn = connectors.AddNew("", "Association")
+    conn.SupplierID = objs(0).ElementID
+    conn.ClientID = objs(2).ElementID
+    conn.Name = "Submits Status": conn.Update
+
+    Set conn = connectors.AddNew("", "Association")
+    conn.SupplierID = objs(2).ElementID
+    conn.ClientID = objs(1).ElementID
+    conn.Name = "Reports to": conn.Update
+
+    Set conn = connectors.AddNew("", "Association")
+    conn.SupplierID = objs(0).ElementID
+    conn.ClientID = objs(1).ElementID
+    conn.Name = "Escalates Issues": conn.Update
+
+    Repository.RefreshModelView phaseGPackage.PackageID
+    statDiagram.Update
+    Repository.ReloadDiagram statDiagram.DiagramID
+
+    Session.Output "Status Reporting Diagram created successfully under MODEL > Architecture Development Method > Phase G"
+    Session.Output "Done!"
+
+End Sub
+
+' Recursive function to find a package by name
+Function findPackageByName(parentPackage, targetName)
+    Dim i, pkg, found
+    Set findPackageByName = Nothing
+    For i = 0 To parentPackage.Packages.Count - 1
+        Set pkg = parentPackage.Packages.GetAt(i)
+        If pkg.Name = targetName Then
+            Set findPackageByName = pkg
+            Exit Function
+        End If
+        Set found = findPackageByName(pkg, targetName)
+        If Not found Is Nothing Then
+            Set findPackageByName = found
+            Exit Function
+        End If
+    Next
+End Function
+
+CreatePhaseGStatusReportingDiagram

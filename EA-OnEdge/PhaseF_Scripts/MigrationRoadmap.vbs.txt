@@ -1,0 +1,132 @@
+Option Explicit
+
+!INC Local Scripts.EAConstants-VBScript
+
+Sub CreatePhaseFMigrationRoadmapDiagram()
+
+    Repository.EnsureOutputVisible "Script"
+    Session.Output "VBScript CREATE PHASE F MIGRATION ROADMAP DIAGRAM"
+    Session.Output "==============================================="
+
+    Dim i, tempModel
+
+    ' Find root model "Model"
+    Dim rootModel As EA.Package
+    Set rootModel = Nothing
+    For i = 0 To Repository.Models.Count - 1
+        Set tempModel = Repository.Models.GetAt(i)
+        If tempModel.Name = "Model" Then
+            Set rootModel = tempModel
+            Exit For
+        End If
+    Next
+    If rootModel Is Nothing Then
+        Session.Output "Error: Root model 'Model' not found."
+        Exit Sub
+    End If
+
+    ' Find "Architecture Development Method"
+    Dim admPackage As EA.Package
+    Set admPackage = findPackageByName(rootModel, "Architecture Development Method")
+    If admPackage Is Nothing Then
+        Session.Output "Error: Architecture Development Method package not found."
+        Exit Sub
+    End If
+
+    ' Find or create Phase F package
+    Dim phaseFPackage As EA.Package
+    Set phaseFPackage = findPackageByName(admPackage, "Phase F")
+    If phaseFPackage Is Nothing Then
+        Set phaseFPackage = admPackage.Packages.AddNew("Phase F", "Package")
+        phaseFPackage.Update
+    End If
+
+    ' Check/Create Migration Roadmap Diagram
+    Dim roadmapDiagram As EA.Diagram
+    Set roadmapDiagram = Nothing
+    For i = 0 To phaseFPackage.Diagrams.Count - 1
+        Dim diag As EA.Diagram
+        Set diag = phaseFPackage.Diagrams.GetAt(i)
+        If diag.Name = "Migration Roadmap Diagram" Then
+            Set roadmapDiagram = diag
+            Exit For
+        End If
+    Next
+    If roadmapDiagram Is Nothing Then
+        Set roadmapDiagram = phaseFPackage.Diagrams.AddNew("Migration Roadmap Diagram", "Custom")
+        roadmapDiagram.Notes = "High-level phased migration roadmap (Pilot, Regional, Global), key milestones and gateways."
+        roadmapDiagram.Update
+    End If
+
+    ' Define elements
+    Dim elements(3), stereotypes(3), types(3), colors(3), sizes(3), notes(3), elementObjects(3)
+    elements(0) = "Phase I: Pilot Deployment": stereotypes(0) = "Plateau": types(0) = "Component": colors(0) = RGB(51,204,51): sizes(0) = "l=100;r=300;t=100;b=50": notes(0) = "Test core systems, initial results."
+    elements(1) = "Phase II: Regional Scale-Up": stereotypes(1) = "Plateau": types(1) = "Component": colors(1) = RGB(91,155,213): sizes(1) = "l=350;r=550;t=100;b=50": notes(1) = "Broaden rollout, optimize integration."
+    elements(2) = "Phase III: Global Expansion": stereotypes(2) = "Plateau": types(2) = "Component": colors(2) = RGB(237,125,49): sizes(2) = "l=600;r=800;t=100;b=50": notes(2) = "Achieve worldwide deployment."
+
+    ' Create elements
+    For i = 0 To 2
+        Dim elem As EA.Element
+        Set elem = phaseFPackage.Elements.AddNew(elements(i), types(i))
+        elem.Stereotype = stereotypes(i)
+        elem.Notes = notes(i)
+        elem.Update
+        Set elementObjects(i) = elem
+    Next
+
+    ' Add to diagram and set color
+    Dim diagObjects As EA.Collection
+    Set diagObjects = roadmapDiagram.DiagramObjects
+    For i = 0 To 2
+        Dim diagObj As EA.DiagramObject
+        Set diagObj = diagObjects.AddNew(sizes(i) & ";", "")
+        diagObj.ElementID = elementObjects(i).ElementID
+        diagObj.BackgroundColor = colors(i)
+        diagObj.Update
+    Next
+
+    ' Connect phases (arrows)
+    Dim connectors As EA.Collection
+    Set connectors = phaseFPackage.Connectors
+    Dim conn As EA.Connector
+
+    Set conn = connectors.AddNew("", "Association")
+    conn.SupplierID = elementObjects(0).ElementID
+    conn.ClientID = elementObjects(1).ElementID
+    conn.Name = "Next Phase"
+    conn.Update
+
+    Set conn = connectors.AddNew("", "Association")
+    conn.SupplierID = elementObjects(1).ElementID
+    conn.ClientID = elementObjects(2).ElementID
+    conn.Name = "Next Phase"
+    conn.Update
+
+    ' Refresh
+    Repository.RefreshModelView phaseFPackage.PackageID
+    roadmapDiagram.Update
+    Repository.ReloadDiagram roadmapDiagram.DiagramID
+
+    Session.Output "Migration Roadmap Diagram created under Phase F."
+    Session.Output "Done!"
+End Sub
+
+' Recursive function to find a package by name
+Function findPackageByName(parentPackage, targetName)
+    Dim i, pkg, found
+    Set findPackageByName = Nothing
+    For i = 0 To parentPackage.Packages.Count - 1
+        Set pkg = parentPackage.Packages.GetAt(i)
+        If pkg.Name = targetName Then
+            Set findPackageByName = pkg
+            Exit Function
+        End If
+        Set found = findPackageByName(pkg, targetName)
+        If Not found Is Nothing Then
+            Set findPackageByName = found
+            Exit Function
+        End If
+    Next
+End Function
+
+CreatePhaseFMigrationRoadmapDiagram
